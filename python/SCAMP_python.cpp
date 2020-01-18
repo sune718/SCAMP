@@ -107,3 +107,25 @@ PYBIND11_MODULE(pySCAMP, m) {
 
   m.attr("__version__") = "dev";
 }
+
+PYBIND11_MODULE(pySCAMPcpu, m) {
+  m.doc() = R"pbdoc(
+        SCAMP: SCAlable Matrix Profile
+        -------------------------------
+        .. currentmodule:: scamp
+        .. autosummary::
+           :toctree: _generate
+           SCAMP_AB
+           SCAMP_SELF
+    )pbdoc";
+
+  m.def("SCAMP_AB", &SCAMP_AB, R"pbdoc(
+        Returns the ab-join matrix profile of 2 time series (in Pearson Correlation)
+    )pbdoc");
+
+  m.def("SCAMP_SELF", &SCAMP_SELF, R"pbdoc(
+        Returns the self-join of 2 time series (in Pearson Correlation)
+  )pbdoc");
+
+  m.attr("__version__") = "dev";
+}

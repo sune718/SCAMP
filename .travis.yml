@@ -1,236 +1,113 @@
-language: cpp
-
-
-jobs:
-  include:
-  - stage: "Build Checks"
-    name: "Fedora CUDA Build"
-    services:
-      - docker
-  
-    before_install:
-      - sudo apt-get update
-      - sudo service docker restart
-      - sleep 5
-      - sudo docker pull fedora:27
-      - git submodule update --init --recursive
-    script:
-      - travis/setup_fedora_tests.sh 27
-
-
-  - stage: "Build Checks"
-    name: "Ubuntu CUDA Build"
-    os: linux
-    dist: xenial
-    addons:
-        apt:
-            packages:
-                clang-6.0
-                clang-format-6.0
-                clang-tidy-6.0
-    before_install:
-      - sudo apt-get install make g++
-    install:
-      - CUDA_REPO_PKG=cuda-repo-ubuntu1604_10.0.130-1_amd64.deb
-      - wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/$CUDA_REPO_PKG
-      - sudo dpkg -i $CUDA_REPO_PKG
-      - sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
-      - rm $CUDA_REPO_PKG
-      - sudo apt-get -y update
-      - sudo apt-get install -y cuda
-      - git submodule update --init --recursive
-      - sudo ln -s /usr/local/cuda-10.0/ /usr/local/cuda
-    script: 
-      - set -e
-      - export PATH=$PATH:/usr/local/cuda/bin
-      - mkdir build && cd build
-      # Build with clang
-      - cmake -D FORCE_CUDA=1 -D CMAKE_CXX_COMPILER=clang++ ..
-      - make -j4
-      - rm -rf *
-      # Build with gcc
-      - cmake -D FORCE_CUDA=1 -D CMAKE_CXX_COMPILER=g++ ..
-      - make -j4
-      - rm -rf *
-      # Build with Default compiler
-      - cmake -D FORCE_CUDA=1 ..
-      - make -j4
-      - rm -rf *
-      # Build client/server
-      - cmake -DFORCE_CUDA=1 -DCMAKE_CXX_COMPILER=g++ -DBUILD_CLIENT_SERVER=1 ..
-      - make -j4
-
-  - stage: "Build Checks"
-    name: "Ubuntu Build"
-    os: linux
-    dist: xenial
-    addons:
-        apt:
-            packages:
-                clang-6.0
-                clang-format-6.0
-                clang-tidy-6.0
-    compiler: clang++-6.0
-    before_install:
-      - sudo apt-get install make g++
-    install:  
-      - git submodule update --init --recursive
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build with clang
-      - cmake -D CMAKE_CXX_COMPILER=clang++ ..
-      - make -j4
-      - rm -rf *
-      # Build with gcc
-      - cmake -D CMAKE_CXX_COMPILER=g++ ..
-      - make -j4
-      - rm -rf *
-      # Build with Default compiler
-      - cmake ..
-      - make -j4
+env:
+  global:
+    - CIBW_MANYLINUX_X86_64_IMAGE=zpzim/scamp-devel-env
+    - CIBW_SKIP="cp27* *-win32 *-manylinux_i686"
+    - CIBW_TEST_COMMAND="python {project}/test/pySCAMPtest.py nogpu"
+    - TWINE_USERNAME=__token__
     
-  - stage: "Build Checks"
-    name: "Ubuntu Client/Server Build"
-    os: linux
-    dist: xenial
-    before_install:
-      - sudo apt-get install make g++
-    install:  
-      - git submodule update --init --recursive
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build with gcc
-      - cmake -DBUILD_CLIENT_SERVER=1 -D CMAKE_CXX_COMPILER=g++ ..
-      - make -j4
-   
-  - stage: "Build Checks"
-    name: "Style Check"
-    os: linux
-    addons:
-        apt:
-            packages:
-                clang-6.0
-                clang-format-6.0
-                clang-tidy-6.0
-    dist: xenial
-    compiler: clang++-6.0
-    script:
-      - bash check_format.sh clang-format-6.0
+matrix:
+  include:
+    - stage: Deploy
+      name: Deploy Wheels Linux
+      os: linux
+      dist: xenial
+      services: docker
+      language: python
+      install:
+        - python -m pip install twine cibuildwheel==1.1.0     
+        - pip install twine wheel setuptools
+        - pip install -U twine wheel setuptools
+        - ./travis/install_cuda_linux_ubuntu1604.sh
+        - export PATH=$PATH:/usr/local/cuda/bin
+      script:
+        - python -m cibuildwheel --output-dir wheelhouse
+      after_success:
+        - python -m twine upload --repository-url https://test.pypi.org/legacy/  wheelhouse/*.whl
+        #- if [[ $TRAVIS_TAG ]]; then python -m twine upload wheelhouse/*.whl; fi
 
-  - stage: "Integration Tests"
-    name: "CPU Integration tests"
-    os: linux
-    dist: xenial
-    compiler: clang++-6.0
-    addons:
-      apt:
-        packages:
-          clang-6.0
-          clang-format-6.0
-          clang-tidy-6.0
-    before_install:
-      - sudo apt-get install make g++ 
-    install:  
-      - git submodule update --init --recursive
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build with clang
-      - cmake -D CMAKE_CXX_COMPILER=clang++ ..
-      - make -j4
-      - cd ../test
-      - ./run_tests.sh ../build/SCAMP /dev/null "--no_gpu=true --num_cpu_workers=2"
-  
-  - stage: "Integration Tests"
-    name: "CPU Extended Integration Tests"
-    os: linux
-    dist: xenial
-    compiler: clang++-6.0
-    language: python
-    python:
-      "3.7"
-    addons:
-      apt:
-        packages:
-          clang-6.0
-          clang-format-6.0
-          clang-tidy-6.0
-          python3
-    before_install:
-      - sudo apt-get install make g++ 
-    install:  
-      - git submodule update --init --recursive
-      - pip install numpy pandas tqdm
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build with clang
-      - cmake -D CMAKE_CXX_COMPILER=clang++ ..
-      - make -j4
-      - cd ../test
-      - python3 ./run_tests.py --executable ../build/SCAMP --extra_args "--no_gpu --num_cpu_workers=2"
-  
-  - stage: "Integration Tests"
-    name: "Distributed CPU Extended Integration Tests"
-    os: linux
-    dist: xenial
-    compiler: clang++-6.0
-    language: python
-    python:
-      "3.7"
-    addons:
-      apt:
-        packages:
-          clang-6.0
-          clang-format-6.0
-          clang-tidy-6.0
-          python3
-    before_install:
-      - sudo apt-get install make g++ 
-    install:  
-      - git submodule update --init --recursive
-      - pip install numpy pandas tqdm
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build with clang
-      - cmake -DCMAKE_C_COMPILER=clang-6.0 -DCMAKE_CXX_COMPILER=clang++-6.0 -DBUILD_CLIENT_SERVER=1 ..
-      - make -j4
-      - ./kubernetes/SCAMPserver &
-      - ./kubernetes/SCAMPclient &
-      - sleep 10
-      - cd ../test
-      - python3 ./run_tests.py --executable ../build/kubernetes/SCAMP_distributed --window_sizes 100 --extra_args "--no_gpu --num_cpu_workers=1 --distributed_tile_size=1500"
+    - stage: Deploy
+      name: Deploy Wheels Mac
+      os: osx
+      osx_image: xcode9.4
+      language: shell
+      install:
+        - python -m pip install twine cibuildwheel==1.1.0     
+        - pip install twine wheel setuptools
+        - pip install -U twine wheel setuptools
+        - wget http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_mac.dmg 
+        - hdiutil mount cuda_10.2.89_mac.dmg
+        - sudo /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/MacOS/CUDAMacOSXInstaller --no-window --accept-eula --install-package=cuda-toolkit
+      script:
+        - python -m cibuildwheel --output-dir wheelhouse
+      after_success:
+        - python -m twine upload --repository-url https://test.pypi.org/legacy/  wheelhouse/*.whl
+        #- if [[ $TRAVIS_TAG ]]; then python -m twine upload wheelhouse/*.whl; fi
+      
+    - stage: Deploy
+      name: Deploy Wheels Windows
+      os: windows
+      language: cpp
+      before_install:
+        - choco install python --version 3.8.0
+        - export PATH="/c/Python38:/c/Python38/Scripts:$PATH"
+        # TODO(zpzim): Cuda is not currently installing properly
+        #- wget --quiet "http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_441.22_win10.exe"
+        #- ./cuda_10.2.89_441.22_win10.exe -s visual_studio_integration_10.2 nvcc_10.2 cufft_dev_10.2
+        #- export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.2/bin":$PATH
+        #- nvcc -V
+      install:
+        - python -m pip install twine cibuildwheel==1.1.0     
+      script:
+        - export TRAVIS_WINDOWS_BUILD=TRUE
+        - python -m cibuildwheel --output-dir wheelhouse
+      after_success:
+        - python -m twine upload --repository-url https://test.pypi.org/legacy/ wheelhouse/*.whl
+        #- if [[ $TRAVIS_TAG ]]; then python -m twine upload wheelhouse/*.whl; fi
+      
+    - stage: Test
+      name: Ubuntu Integration Tests
+      os: linux
+      dist: xenial
+      language: cpp
+      compiler: clang-6.0
+      before_install:
+        - sudo apt-add-repository -y ppa:deadsnakes/ppa
+        - sudo apt-get update
+        - sudo apt-get install -y python3.6 python3.6-venv python3 python3-pip clang-format-6.0 clang-tidy-6.0
+        - python3.6 -V
+        - python3.6 -m pip -V
+        - python3.6 -m pip install numpy pandas tqdm
+        - ./travis/install_cuda_linux_ubuntu1604.sh
+        - export PATH=$PATH:/usr/local/cuda/bin
+        - mkdir build && cd build
+        - cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_CPU_ONLY_LIB=1 -DBUILD_CLIENT_SERVER=1 -DPYTHON_EXECUTABLE=$(python-config --prefix)/bin/python3.5 -DPYTHON_LIBRARY=$(python-config --prefix)/lib/libpython3.5m.so -DPYTHON_INCLUDE_DIR=$(python-config --prefix)/include/python3.5m ..
+        - make -j2
+        - cd ..
+      script:
+        - pwd
+        - bash check_format.sh clang-format-6.0
+        - cd test
+        - ./run_tests.sh ../build/SCAMP /dev/null "--no_gpu=true --num_cpu_workers=2" 
+        - python3.6 ./run_tests.py --executable ../build/SCAMP --extra_args "--no_gpu --num_cpu_workers=2"
+        - ../build/kubernetes/SCAMPserver &
+        - ../build/kubernetes/SCAMPclient &
+        - sleep 10
+        - ./run_tests.sh ../build/kubernetes/SCAMP_distributed /dev/null
+        - python3.6 ./run_tests.py --executable ../build/kubernetes/SCAMP_distributed --window_sizes 100 --extra_args "--no_gpu --num_cpu_workers=1 --distributed_tile_size=1500"
+      deploy:
+        provider: pypi
+        user: __token__
+        password:
+          secure: Hq6r7tudZDxs30DJpzU6F6MxSurFUTk0pC5p9bhzxmwd2qKqitjB44Wn2Z//HhSUNGw9CPpsl/CO8Vhm5CTW0MteBl5D65Q92edUfHM9YPHDBn97TL09vUnK3MvkPrnJS0/VKuPJAxPe3dFTKwCVIp7zOn/Dle8VUesLe8WCsla29F42fdrdXyuXrcE+wNxHv7UWIITPcBR6j3CfsOfJ80HeLK64O8vZB6CMdH0dk3eTDr3dNU4AMhOlPAn4U6/McFWC/qaQLutjDZBWVgInZbUUr32Vp9RL9JEIcgHaAiw1CrdSuCAWKIHTOQc4KvnpJxdTboS22FQ5JdUFSeeupD+U/rMmr9IYrb9df9p570B7/L+fgrEgB5bGa6Y3A5sLwThskd41VXbAq+YK5pnsfVAyKkNhAfnrgweUCyHZdXfVb3REPb+3ty8GhqnCJASEYnX3lgvlC3E7Tyhm8f0u8D7dVxdnsNZ02tnKYNL6X4l7OsUEhDcIG8cArl8J7B+/zpGkGN/qXiX8XR2isY4sjVUBOm8ISMEpAylUZLo/W2HfRO+aC6RhYMWu/zYiTA/Ll29n0cZ9LwbxMmLeF++q8StqNDt3FG6/a/LE+AK/JEr33Wh2KcS9VFQ3r4co5cAgqDpcrldVqNsmXOCLtwEmhReP8WLp7iPT9SxKYnVm4yk=
+        distributions: "sdist"
+        skip_existing: true
+        skip_cleanup: false
+        server: https://test.pypi.org/legacy/
+        on:
+          all_branches: true
 
-  - stage: "Integration Tests"
-    name: "Distributed Integration tests"
-    os: linux
-    dist: xenial
-    compiler: g++
-    addons:
-      apt:
-        packages:
-          clang-6.0
-          clang-format-6.0
-          clang-tidy-6.0
-    before_install:
-      - sudo apt-get install make g++ 
-    install:  
-      - git submodule update --init --recursive
-    script: 
-      - set -e
-      - mkdir build && cd build
-      # Build client and server
-      - cmake -D CMAKE_CXX_COMPILER=g++ -DBUILD_CLIENT_SERVER=1 ..
-      - make -j4
-      - ./kubernetes/SCAMPserver &
-      - ./kubernetes/SCAMPclient &
-      - sleep 10
-      - cd ../test
-      - ./run_tests.sh ../build/kubernetes/SCAMP_distributed /dev/null
 
 notifications:
-    email:
-        on_success: never
+  email:
+    on_success: never
+deploy:
