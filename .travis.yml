@@ -3,6 +3,7 @@ env:
     - CIBW_MANYLINUX_X86_64_IMAGE=zpzim/scamp-devel-env
     - CIBW_SKIP="cp27* *-win32 *-manylinux_i686"
     - CIBW_TEST_COMMAND="python {project}/test/pySCAMPtest.py nogpu"
+    - CIBW_BUILD_VERBOSITY=3
     - TWINE_USERNAME=__token__
     
 matrix:
@@ -14,14 +15,16 @@ matrix:
       services: docker
       language: python
       install:
+        - python --version
         - python -m pip install twine cibuildwheel==1.1.0     
-        - pip install twine wheel setuptools
-        - pip install -U twine wheel setuptools
+        - python -m pip install twine wheel setuptools
+        - python -m pip install -U twine wheel setuptools
         - ./travis/install_cuda_linux_ubuntu1604.sh
         - export PATH=$PATH:/usr/local/cuda/bin
       script:
         - python -m cibuildwheel --output-dir wheelhouse
       after_success:
+        - python -m twine check wheelhouse/*.whl
         - python -m twine upload --repository-url https://test.pypi.org/legacy/  wheelhouse/*.whl
         #- if [[ $TRAVIS_TAG ]]; then python -m twine upload wheelhouse/*.whl; fi
 
@@ -31,15 +34,17 @@ matrix:
       osx_image: xcode9.4
       language: shell
       install:
+        - python --version
         - python -m pip install twine cibuildwheel==1.1.0     
-        - pip install twine wheel setuptools
-        - pip install -U twine wheel setuptools
-        - wget http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_mac.dmg 
+        - python -m pip install twine wheel setuptools
+        - python -m pip install -U twine wheel setuptools
+        - wget --quiet http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_mac.dmg 
         - hdiutil mount cuda_10.2.89_mac.dmg
         - sudo /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/MacOS/CUDAMacOSXInstaller --no-window --accept-eula --install-package=cuda-toolkit
       script:
         - python -m cibuildwheel --output-dir wheelhouse
       after_success:
+        - python -m twine check wheelhouse/*.whl
         - python -m twine upload --repository-url https://test.pypi.org/legacy/  wheelhouse/*.whl
         #- if [[ $TRAVIS_TAG ]]; then python -m twine upload wheelhouse/*.whl; fi
       
