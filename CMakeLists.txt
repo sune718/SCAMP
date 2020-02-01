@@ -7,6 +7,9 @@ project(SCAMPmain LANGUAGES CXX)
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 1)
 
+# Workaround for generating with mingw makefiles
+set(CMAKE_SH="CMAKE_SH-NOTFOUND")
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()

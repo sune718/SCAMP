@@ -1,0 +1,70 @@
+variables:
+  CIBW_MANYLINUX_X86_64_IMAGE: zpzim/scamp-devel-env
+  CIBW_SKIP: "cp27* *-win32 *-manylinux_i686"
+  CIBW_TEST_COMMAND: "python {project}/test/pySCAMPtest.py nogpu"
+  CIBW_BUILD_VERBOSITY: 3
+    
+
+jobs:
+- job:
+  displayName: windows
+  pool:
+    vmImage: 'windows-2019'
+  strategy:
+    matrix:
+      64-bit Release Clang:
+        BuildType: Release
+        CMakeArgs: '-GNinja -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang++.exe"'
+        JFlag: -j 4
+  steps:
+    - checkout: self
+      submodules: true
+      displayName: 'Checkout Submodules'
+    - script: choco install -y wget
+      displayName: 'Install wget'
+    - bash: |
+        python --version
+        python -m pip install --upgrade pip
+        python -m pip install twine cibuildwheel==1.1.0     
+        echo 'Downloading CUDA'
+        wget --quiet "http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_441.22_win10.exe"
+        #wget --quiet "https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers2/cuda_9.2.148_win10"
+        echo 'Installing CUDA'
+        #./cuda_9.2.148_win10.exe -s nvcc_9.2
+        #echo Finished with code $?
+        #./cuda_9.2.148_win10.exe -s cufft_dev_9.2
+        #echo Finished with code $?
+        ./cuda_10.2.89_441.22_win10.exe -s nvcc_10.2 cufft_dev_10.2 cudart_10.2 cufft_10.2 visual_studio_integration_10.2
+        echo Finished with code $?
+        echo $CUDA_PATH
+        export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.2/bin":$PATH
+        nvcc -V
+        #export PATH="/c/Program Files/LLVM/bin":$PATH
+        #clang++ --version
+        #export CC=clang
+        #export CXX=clang++
+        #export CMAKE_GENERATOR=Ninja
+        #/cuda_10.2.89_441.22_win10.exe -s visual_studio_integration_10.2
+        #echo Finished with code $?
+        #echo Finished with code $?
+        
+      displayName: 'Install CUDA and other Dependencies' 
+    - bash: |
+        mkdir build-test
+        cd build-test
+        nvcc -V
+        export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.2/bin":$PATH
+        nvcc -V
+        #ls "/c/Program Files"
+        cmake -T llvm -DCMAKE_BUILD_TYPE=Release ..
+        rm -rf *
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        cmake --build . 
+        echo $CUDA_PATH
+        echo $PATH
+        nvcc -V
+        cd ..
+        python -m cibuildwheel --output-dir wheelhouse .
+      displayName: 'Build Wheels'
+    - task: PublishBuildArtifacts@1
+      inputs: {pathtoPublish: 'wheelhouse'} 

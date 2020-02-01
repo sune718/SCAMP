@@ -52,14 +52,55 @@ matrix:
       name: Deploy Wheels Windows
       os: windows
       language: cpp
+      #before_install:
+      #- |-
+      #    case $TRAVIS_OS_NAME in
+      #      windows)
+      #        [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
+      #        choco uninstall -y mingw
+      #        choco upgrade --no-progress -y msys2
+      #        export msys2='cmd //C RefreshEnv.cmd '
+      #        export msys2+='& set MSYS=winsymlinks:nativestrict '
+      #        export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
+      #        export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
+      #        export msys2+=" -msys2 -c "\"\$@"\" --"
+      #        $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain
+      #        ## Install more MSYS2 packages from https://packages.msys2.org/base here
+      #        taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
+      #        export PATH=/C/tools/msys64/mingw64/bin:$PATH
+      #        export MAKE=mingw32-make  # so that Autotools can find it
+      #        ;;
+      #    esac
+
+      #before_cache:
+      #- |-
+      #    case $TRAVIS_OS_NAME in
+      #      windows)
+              # https://unix.stackexchange.com/a/137322/107554
+      #        $msys2 pacman --sync --clean --noconfirm
+      #        ;;
+      #    esac
+
+      #cache:
+      #    directories:
+      #    - $HOME/AppData/Local/Temp/chocolatey
+      #    - /C/tools/msys64
+      #    - $CUDA_PATH
       before_install:
+      #  - mingw32-make --version
         - choco install python --version 3.8.0
+        - choco install ninja
         - export PATH="/c/Python38:/c/Python38/Scripts:$PATH"
-        # TODO(zpzim): Cuda is not currently installing properly
         #- wget --quiet "http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_441.22_win10.exe"
-        #- ./cuda_10.2.89_441.22_win10.exe -s visual_studio_integration_10.2 nvcc_10.2 cufft_dev_10.2
+        #- ./cuda_10.2.89_441.22_win10.exe -s nvcc_10.2 cufft_dev_10.2 cudart_10.2
+        #- echo $CUDA_PATH
         #- export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.2/bin":$PATH
         #- nvcc -V
+        - export PATH="/c/Program Files/LLVM/bin":$PATH
+        - clang++ --version
+        - export CC=clang
+        - export CXX=clang++
+        - export CMAKE_GENERATOR="Ninja"
       install:
         - python -m pip install twine cibuildwheel==1.1.0     
       script:
